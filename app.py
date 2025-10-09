@@ -5,6 +5,9 @@ import re
 import datetime
 import pandas as pd
 import os
+import pytesseract
+pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
+
 
 # Inicializar o banco de dados local
 HISTORICO_ARQ = "cotacoes_historico.csv"
@@ -23,8 +26,9 @@ if uploaded_file:
     st.image(image, caption="Print recebido", use_column_width=True)
 
     # OCR para extrair texto
-    texto_extraido = pytesseract.image_to_string(image, lang="por")
+    texto_extraido = pytesseract.image_to_string(image, lang="por+eng")
 
+ 
     # Expressões regulares para encontrar dados
     milhas_match = re.search(r"Total.*?(\d{2,3}[\.\d]*) milhas", texto_extraido.replace(".", "").replace(",", "."))
     taxa_match = re.search(r"Taxa.*?R\$\s*(\d+[\.,]\d{2})", texto_extraido)
