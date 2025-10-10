@@ -1,3 +1,5 @@
 tesseract-ocr
 tesseract-ocr-por
 libtesseract-dev
+streamlit-image-paste
+
