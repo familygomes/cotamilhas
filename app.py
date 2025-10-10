@@ -7,6 +7,7 @@ import pandas as pd
 import streamlit as st
 from PIL import Image
 import pytesseract
+import requests
 
 # PDF
 from reportlab.lib import colors
@@ -17,10 +18,7 @@ from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase import pdfmetrics
 from reportlab.pdfbase.ttfonts import TTFont
 
-# Fonte com acentuação
-pdfmetrics.registerFont(TTFont('DejaVuSans', 'DejaVuSans.ttf'))
-
-# ---------------- CONFIG ----------------
+# ============= CONFIGURAÇÃO INICIAL =============
 st.set_page_config(page_title="CotaMilhas Express • Portão 5 Viagens", layout="centered")
 
 COLOR_PRIMARY = colors.HexColor("#007C91")
@@ -29,8 +27,23 @@ COLOR_ACCENT = colors.HexColor("#F58220")
 HIST_CSV = "cotacoes_historico.csv"
 PDF_DIR = "pdfs"
 LOGOS_DIR = "logos"
+FONT_PATH = "DejaVuSans.ttf"
+
 os.makedirs(PDF_DIR, exist_ok=True)
 
+# === DOWNLOAD AUTOMÁTICO DA FONTE (para acentuação) ===
+if not os.path.exists(FONT_PATH):
+    url = "https://github.com/dejavu-fonts/dejavu-fonts/raw/version_2_37/ttf/DejaVuSans.ttf"
+    r = requests.get(url)
+    if r.status_code == 200:
+        with open(FONT_PATH, "wb") as f:
+            f.write(r.content)
+        st.toast("✅ Fonte DejaVuSans baixada com sucesso!")
+
+# Registrar a fonte
+pdfmetrics.registerFont(TTFont("DejaVuSans", FONT_PATH))
+
+# Histórico
 if not os.path.exists(HIST_CSV):
     pd.DataFrame(columns=[
         "Data/Hora","Companhia","Origem","Destino","Ida Data","Ida Saída",
@@ -38,9 +51,7 @@ if not os.path.exists(HIST_CSV):
         "Passageiros","Milhas","Taxa","Milheiro","Margem %","Juros % a.m.","Valor Pix"
     ]).to_csv(HIST_CSV, index=False)
 
-st.title("🛫 CotaMilhas Express — Portão 5 Viagens")
-
-# --------------- Funções ----------------
+# ================= FUNÇÕES AUXILIARES =================
 def _to_float(s):
     s = s.replace(".", "").replace(",", ".") if s else "0"
     try:
@@ -56,13 +67,13 @@ def _pad_hhmm(t):
     hh = int(m.group(1)); mm = m.group(2)
     return f"{hh:02d}:{mm}"
 
+def _strip_accents(s): 
+    return ''.join(c for c in unicodedata.normalize('NFKD', s) if not unicodedata.combining(c))
+
 MESES = {
     "jan":"01","fev":"02","mar":"03","abr":"04","mai":"05","jun":"06",
     "jul":"07","ago":"08","set":"09","out":"10","nov":"11","dez":"12"
 }
-
-def _strip_accents(s): 
-    return ''.join(c for c in unicodedata.normalize('NFKD', s) if not unicodedata.combining(c))
 
 def extrair_milhas(texto):
     pad = re.compile(r"(\d{1,3}(?:\.\d{3})+|\d+)\s*milhas", re.IGNORECASE)
@@ -80,6 +91,7 @@ def extrair_rota(texto):
 def extrair_datas_horas(texto):
     texto_s = _strip_accents(texto.lower())
     ano = dt.datetime.now().year
+
     m1 = re.search(r"(\d{1,2})\s*de\s*(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)", texto_s)
     m2b = re.findall(r"(\d{1,2})\s*de\s*(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)", texto_s)
     ida = volta = "-"
@@ -91,7 +103,12 @@ def extrair_datas_horas(texto):
 
     horas = re.findall(r"(\d{1,2}[:h]\d{2})", texto_s)
     horas = [_pad_hhmm(h) for h in horas]
-    ida_s, ida_c, vol_s, vol_c = horas + ["-"]*4
+
+    # 🧠 Garante que sempre tenha 4 elementos
+    while len(horas) < 4:
+        horas.append("-")
+
+    ida_s, ida_c, vol_s, vol_c = horas[:4]
     return ida, ida_s, ida_c, volta, vol_s, vol_c
 
 def calcular_parcelas(valor_total, juros_am, max_n=10):
@@ -136,15 +153,12 @@ def gerar_pdf(companhia, origem, destino,
     c = canvas.Canvas(buf, pagesize=A4)
     c.setFont("DejaVuSans", 12)
 
-    # Header
+    # Cabeçalho
     p5 = logo_portao()
     cia_img = logo_cia(companhia)
     if p5: c.drawImage(p5, 2*cm, H-70, width=95, height=42, mask='auto')
     if cia_img: c.drawImage(cia_img, W-2*cm-85, H-68, width=85, height=38, mask='auto')
-    c.setStrokeColor(COLOR_PRIMARY)
-    c.setLineWidth(2)
-    c.line(2*cm, H-75, W-2*cm, H-75)
-    c.setFillColor(COLOR_PRIMARY)
+
     c.setFont("DejaVuSans-Bold", 20)
     c.drawCentredString(W/2, H-95, "Informações do voo")
     c.setFont("DejaVuSans", 10)
@@ -187,9 +201,10 @@ def gerar_pdf(companhia, origem, destino,
     c.save(); buf.seek(0)
     return buf
 
-# ---------------- Interface ----------------
-st.subheader("📸 Inserir print da passagem")
-uploaded = st.file_uploader("Arraste ou selecione a imagem (PNG ou JPG)", type=["png","jpg","jpeg"])
+# ================= INTERFACE STREAMLIT =================
+st.title("🛫 CotaMilhas Express — Portão 5 Viagens")
+
+uploaded = st.file_uploader("📸 Arraste ou selecione a imagem (PNG/JPG)", type=["png","jpg","jpeg"])
 
 if uploaded:
     image = Image.open(uploaded)
