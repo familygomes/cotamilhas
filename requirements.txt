@@ -3,3 +3,5 @@ pandas
 pytesseract
 reportlab
 streamlit-image-paste
+Pillow
+
