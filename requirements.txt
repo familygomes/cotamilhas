@@ -3,4 +3,4 @@ pytesseract==0.3.10
 reportlab==4.1.0
 pandas==2.2.3
 Pillow==10.4.0
-git+https://github.com/andfanilo/streamlit-image-paste
+streamlit_image_paste @ git+https://github.com/andfanilo/streamlit-image-paste@main
