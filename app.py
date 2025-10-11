@@ -3,8 +3,22 @@ from PIL import Image
 import pytesseract
 import re
 import pandas as pd
+import io
+import datetime as dt
+from reportlab.lib.pagesizes import A4
+from reportlab.lib.units import cm
+from reportlab.pdfgen import canvas
+from reportlab.lib import colors
+import os
+
+# ✅ Deve ser a primeira configuração Streamlit
+st.set_page_config(page_title="CotaMilhas Express", layout="centered")
 
 uploaded_file = st.file_uploader("Envie aqui o print da tela (imagem da passagem)", type=["png", "jpg", "jpeg"])
+
+if uploaded_file:
+    image = Image.open(uploaded_file)
+    st.image(image, caption="Print enviado", use_column_width=True)
 
 if uploaded_file:
     image = Image.open(uploaded_file)
