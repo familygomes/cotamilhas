@@ -124,10 +124,14 @@ st.title("🛫 CotaMilhas Express - Portão 5 Viagens")
 st.markdown("Cole ou envie o print da passagem para gerar a cotação automaticamente.")
 
 # Captura da imagem
-image = image_paste(label="📋 Cole seu print aqui (Ctrl + V) ou envie um arquivo")
-if not image:
-    uploaded = st.file_uploader("📎 Ou envie manualmente o print:", type=["png", "jpg", "jpeg"])
-    if uploaded:
+uploaded_file = st.file_uploader(
+    "Envie aqui o print da tela (imagem da passagem)",
+    type=["png", "jpg", "jpeg"]
+)
+
+if uploaded_file:
+    image = Image.open(uploaded_file)
+    st.image(image, caption="Print enviado", use_column_width=True)
         image = Image.open(uploaded)
 
 if image:
