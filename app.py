@@ -119,7 +119,7 @@ def gerar_pdf(companhia, origem, destino, ida_data, ida_saida, ida_chegada,
 
 
 # === Interface Streamlit ===
-st.set_page_config(page_title="CotaMilhas Express", layout="centered")
+
 st.title("🛫 CotaMilhas Express - Portão 5 Viagens")
 st.markdown("Cole ou envie o print da passagem para gerar a cotação automaticamente.")
 
