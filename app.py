@@ -38,7 +38,7 @@ if uploaded_file is not None:
     # -----------------------------------------------------
     st.info("🔍 Lendo as informações da imagem...")
     try:
-        text = pytesseract.image_to_string(image, lang='por')
+        text = pytesseract.image_to_string(image, lang='eng')
         st.text_area("🧾 Texto identificado na imagem:", text, height=200)
 
         # -------------------------------------------------
