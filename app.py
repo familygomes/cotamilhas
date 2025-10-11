@@ -3,6 +3,24 @@ from PIL import Image
 import pytesseract
 import re
 import pandas as pd
+
+uploaded_file = st.file_uploader("Envie aqui o print da tela (imagem da passagem)", type=["png", "jpg", "jpeg"])
+
+if uploaded_file:
+    image = Image.open(uploaded_file)
+    st.image(image, caption="Print enviado", use_column_width=True)
+    # Converter imagem para texto usando OCR
+    text = pytesseract.image_to_string(image, lang="por")
+
+    # Procurar valor da taxa de embarque (ex: BRL 783,33 ou R$ 204,75)
+    import re
+    match = re.search(r"(?:BRL|R\$)\s*[\d\.,]+", text)
+
+    if match:
+        taxa_embarque = match.group()
+        st.success(f"💰 Taxa de embarque detectada: {taxa_embarque}")
+    else:
+        st.warning("⚠️ Não foi possível identificar a taxa de embarque no print.")
 import io
 import datetime as dt
 from reportlab.lib.pagesizes import A4
