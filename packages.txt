@@ -1,5 +1,5 @@
-tesseract-ocr
-libtesseract-dev
-libleptonica-dev
-pkg-config
-poppler-utils
+streamlit==1.38.0
+pytesseract==0.3.10
+reportlab==4.1.0
+pandas==2.2.3
+Pillow==10.4.0
