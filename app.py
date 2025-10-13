@@ -258,12 +258,16 @@ def gerar_pdf(
 # ==============================
 # Interface
 # ==============================
-st.subheader("Print da passagem")
-c1, c2 = st.columns(2)
-with c1:
-    uploaded = st.file_uploader("Arraste/solte ou escolha um arquivo (PNG/JPG)", type=["png", "jpg", "jpeg"])
-with c2:
-    cam = st.camera_input("Ou use a câmera (opcional)")
+st.subheader("📸 Envie o print da passagem")
+
+uploaded = st.file_uploader(
+    "Arraste e solte aqui ou clique para selecionar o print (PNG ou JPG)",
+    type=["png", "jpg", "jpeg"]
+)
+
+image = None
+if uploaded:
+    image = Image.open(uploaded)
 
 image = None
 if uploaded:
