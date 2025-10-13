@@ -18,16 +18,16 @@ from reportlab.lib.utils import ImageReader
 
 # ------------------------ CONFIG ------------------------
 st.set_page_config(page_title="CotaMilhas Express • Portão 5 Viagens", layout="centered")
-pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"   # Streamlit Cloud
+# Em Cloud Linux, o tesseract costuma estar em /usr/bin/tesseract
+pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
 
-COLOR_PRIMARY = colors.HexColor("#007C91")  # Azul
-COLOR_ACCENT  = colors.HexColor("#F58220")  # Laranja
+COLOR_PRIMARY = colors.HexColor("#007C91")  # Azul Portão 5
+COLOR_BORDER  = colors.HexColor("#E5E7EB")  # Cinza suave
 
-HIST_CSV = "cotacoes_historico.csv"         # manter na raiz (conforme sua escolha)
-PDF_DIR  = "pdfs"                            # salvar PDFs em /pdfs
+HIST_CSV  = "cotacoes_historico.csv"
+PDF_DIR   = "pdfs"
+LOGOS_DIR = "logos"
 os.makedirs(PDF_DIR, exist_ok=True)
-
-LOGOS_DIR = "logos"                          # suas logos estão aqui
 
 # criar CSV se não existir
 if not os.path.exists(HIST_CSV):
@@ -40,7 +40,7 @@ if not os.path.exists(HIST_CSV):
     ]).to_csv(HIST_CSV, index=False)
 
 st.title("🛫 CotaMilhas Express — Portão 5 Viagens")
-st.caption("Envie/cole o print, ajuste milheiro/margem/juros e gere o PDF profissional.")
+st.caption("Envie o print, ajuste valores e gere uma cotação profissional em PDF.")
 
 # ------------------------ UTILS -------------------------
 def _to_float(s: str) -> float:
@@ -69,42 +69,37 @@ def _strip_accents(s: str) -> str:
     return ''.join(c for c in unicodedata.normalize('NFKD', s) if not unicodedata.combining(c))
 
 def extrair_milhas(texto: str) -> float:
-    # pega todas as ocorrências e usa a maior (total)
     pad = re.compile(r"(\d{1,3}(?:\.\d{3})+|\d+)\s*milhas", re.IGNORECASE)
     nums = [int(n.replace(".", "")) for n in pad.findall(texto)]
     return float(max(nums)) if nums else 0.0
 
 def extrair_taxa(texto: str) -> float:
-    m = re.search(r"(?:R\$|BRL)\s*([\d\.,]+)", texto, re.IGNORECASE)
-    if m: return _to_float(m.group(1))
-    return 0.0
+    # LATAM costuma aparecer como "BRL 93,57"; fallback para "R$ 93,57"
+    m = re.search(r"BRL\s*([\d\.,]+)", texto, re.IGNORECASE)
+    if not m:
+        m = re.search(r"R\$\s*([\d\.,]+)", texto, re.IGNORECASE)
+    return _to_float(m.group(1)) if m else 0.0
 
 def extrair_rota(texto: str):
     m = re.search(r"\b([A-Z]{3})\b[^A-Z]{0,30}\b([A-Z]{3})\b", texto)
-    if m: return m.group(1), m.group(2)
-    return "-", "-"
+    return (m.group(1), m.group(2)) if m else ("-", "-")
 
 def extrair_datas_horas(texto: str):
-    # Formatos tipo: "qui., 26 de fev." / "05 de mar."
     texto_s = _strip_accents(texto.lower())
     m1 = re.search(r"(\d{1,2})\s*de\s*(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)", texto_s)
     m2 = re.search(r"(?:volta|retorno|voltar).*?(\d{1,2})\s*de\s*(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)", texto_s, re.DOTALL)
-    ida_data = "-"
-    volta_data = "-"
+    ida_data, volta_data = "-", "-"
     ano = dt.datetime.now().year
-
     if m1:
         ida_data = f"{int(m1.group(1)):02d}/{MESES[m1.group(2)]}/{ano}"
     if m2:
         volta_data = f"{int(m2.group(1)):02d}/{MESES[m2.group(2)]}/{ano}"
     else:
-        # se não capturou explicitamente "volta", tenta o 2º padrão
         m2b = re.findall(r"(\d{1,2})\s*de\s*(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)", texto_s)
         if len(m2b) >= 2:
             d, mes = m2b[1]
             volta_data = f"{int(d):02d}/{MESES[mes]}/{ano}"
 
-    # Horas (pega 4 primeiras: ida saida/chegada, volta saida/chegada)
     horas = re.findall(r"\b(\d{1,2}[:h]\d{2})\b", texto_s)
     horas = [_pad_hhmm(h) for h in horas]
     ida_saida   = horas[0] if len(horas) >= 1 else "-"
@@ -135,21 +130,14 @@ def load_logo_portao5():
 
 def load_logo_cia(cia: str):
     cia = (cia or "").upper().strip()
-    if cia == "GOL":
-        return _try_logo([
-            os.path.join(LOGOS_DIR, "logo gol.png"),
-            os.path.join(LOGOS_DIR, "logogol.png")
-        ])
-    if cia == "LATAM":
-        return _try_logo([
-            os.path.join(LOGOS_DIR, "logo latam.png"),
-            os.path.join(LOGOS_DIR, "logolatam.png")
-        ])
-    if cia == "AZUL":
-        return _try_logo([
-            os.path.join(LOGOS_DIR, "logo azul.png"),
-            os.path.join(LOGOS_DIR, "logoazul.png")
-        ])
+    logos = {
+        "GOL": ["logo gol.png", "logogol.png"],
+        "LATAM": ["logo latam.png", "logolatam.png"],
+        "AZUL": ["logo azul.png", "logoazul.png"]
+    }
+    for k, files in logos.items():
+        if cia == k:
+            return _try_logo([os.path.join(LOGOS_DIR, f) for f in files])
     return None
 
 def gerar_pdf(
@@ -164,29 +152,25 @@ def gerar_pdf(
     buf = BytesIO()
     c = canvas.Canvas(buf, pagesize=A4)
 
-    # Header
-    c.setFillColor(COLOR_ACCENT)
-    c.rect(0, H - 80, W, 80, fill=True, stroke=False)
-
+    # Cabeçalho branco com logos
     p5 = load_logo_portao5()
     cia_img = load_logo_cia(companhia)
-    if p5:      c.drawImage(p5, 2*cm, H - 70, width=95, height=42, mask='auto', preserveAspectRatio=True, anchor='sw')
-    if cia_img: c.drawImage(cia_img, W - 2*cm - 95, H - 70, width=95, height=42, mask='auto', preserveAspectRatio=True, anchor='sw')
+    if p5:      c.drawImage(p5, 2*cm, H - 70, width=95, height=42, mask='auto')
+    if cia_img: c.drawImage(cia_img, W - 2*cm - 95, H - 70, width=95, height=42, mask='auto')
 
-    c.setFillColor(colors.white)
+    c.setFillColor(colors.black)
     c.setFont("Helvetica-Bold", 18)
-    c.drawCentredString(W/2, H - 45, "Informacoes do voo")
+    c.drawCentredString(W/2, H - 40, "Informações do Voo")
     c.setFont("Helvetica", 10)
-    c.drawRightString(W - 2*cm, H - 60, f"Gerado em {dt.datetime.now().strftime('%d/%m/%Y')}")
+    c.drawRightString(W - 2*cm, H - 55, f"Gerado em {dt.datetime.now().strftime('%d/%m/%Y')}")
 
-    # Bloco IDA
-    y = H - 130
+    # Itinerário Ida
+    y = H - 120
     c.setFillColor(COLOR_PRIMARY)
     c.roundRect(2*cm, y, W - 4*cm, 26, 6, fill=True, stroke=False)
     c.setFillColor(colors.white)
     c.setFont("Helvetica-Bold", 12)
-    c.drawString(2.3*cm, y + 7, "✈️  Itinerario de IDA")
-    c.drawRightString(W - 2.3*cm, y + 7, "1 Trecho")
+    c.drawString(2.3*cm, y + 7, "✈️  Itinerário de Ida")
 
     y -= 38
     c.setFillColor(colors.black)
@@ -195,14 +179,13 @@ def gerar_pdf(
     c.setFont("Helvetica", 11)
     c.drawString(2.5*cm, y - 18, f"{ida_data}  |  {ida_saida} → {ida_chegada}")
 
-    # Bloco VOLTA
+    # Itinerário Volta
     y -= 64
     c.setFillColor(COLOR_PRIMARY)
     c.roundRect(2*cm, y, W - 4*cm, 26, 6, fill=True, stroke=False)
     c.setFillColor(colors.white)
     c.setFont("Helvetica-Bold", 12)
-    c.drawString(2.3*cm, y + 7, "🛬  Itinerario de VOLTA")
-    c.drawRightString(W - 2.3*cm, y + 7, "1 Trecho")
+    c.drawString(2.3*cm, y + 7, "🛬  Itinerário de Volta")
 
     y -= 38
     c.setFillColor(colors.black)
@@ -211,7 +194,7 @@ def gerar_pdf(
     c.setFont("Helvetica", 11)
     c.drawString(2.5*cm, y - 18, f"{volta_data}  |  {volta_saida} → {volta_chegada}")
 
-    # Passageiros + Valor
+    # Passageiros e Valor Pix
     y -= 60
     c.setFont("Helvetica-Bold", 13)
     c.drawString(2.5*cm, y, f"Passageiros: {passageiros}")
@@ -220,87 +203,100 @@ def gerar_pdf(
     c.setFont("Helvetica-Bold", 15)
     c.drawString(2.5*cm, y, f"💰 Valor total (Pix): R$ {total_pix:,.2f}")
 
-    # Parcelamento
+    # Parcelamento com borda
     y -= 40
     c.setFont("Helvetica-Bold", 14)
     c.setFillColor(COLOR_PRIMARY)
-    c.drawString(2.5*cm, y, "💳 Opcoes de parcelamento")
-    y -= 10
-    c.setStrokeColor(colors.HexColor("#E5E7EB"))
-    c.line(2.5*cm, y, W - 2.5*cm, y)
+    c.drawString(2.5*cm, y, "💳 Opções de Parcelamento")
+    y -= 12
+    c.setStrokeColor(COLOR_BORDER)
+    box_height = len(tabela_parc) * 16 + 16
+    c.rect(2.4*cm, y - box_height, W - 4.8*cm, box_height, stroke=True, fill=False)
 
-    y -= 18
+    y -= 20
     c.setFillColor(colors.black)
     c.setFont("Helvetica", 12)
-    col1_x, col2_x = 2.6*cm, 7.0*cm
+    col1_x, col2_x = 2.7*cm, 7.0*cm
     for n, pmt in tabela_parc:
         c.drawString(col1_x, y, f"{n}x")
         c.drawString(col2_x, y, f"R$ {pmt:,.2f}")
         y -= 16
         if y < 2.5*cm:
+            c.showPage()
+            y = H - 3*cm
+
+    # Condições
+    y -= 30
+    c.setFont("Helvetica-Bold", 12)
+    c.setFillColor(COLOR_PRIMARY)
+    c.drawString(2.5*cm, y, "Condições da Cotação")
+    y -= 15
+    c.setFillColor(colors.HexColor("#555555"))
+    c.setFont("Helvetica", 10)
+    texto = (
+        "Esta cotação foi gerada com base na disponibilidade e valores obtidos no momento da simulação.\n\n"
+        "Os preços estão sujeitos a variações até a confirmação da emissão.\n\n"
+        "Pagamentos via Pix têm desconto para pagamento à vista. Parcelamentos podem ter acréscimos conforme condições informadas.\n\n"
+        "Remarcações e Cancelamentos: sujeitos à disponibilidade de assentos, diferenças tarifárias e políticas de multa da companhia aérea.\n\n"
+        "A Portão 5 Viagens atua como consultoria especializada em viagens, oferecendo suporte completo na escolha e emissão das passagens, garantindo o melhor custo-benefício e tranquilidade ao viajante.\n\n"
+        "✈️ Comece sua viagem embarcando pelo Portão 5."
+    )
+    for line in texto.split("\n"):
+        c.drawString(2.5*cm, y, line)
+        y -= 14
+        if y < 2.5*cm:
             c.showPage(); y = H - 3*cm
 
-    # Rodapé
-    c.setFont("Helvetica", 9)
-    c.setFillColor(colors.grey)
-    c.drawString(2*cm, 1.5*cm, "Gerado automaticamente via CotaMilhas Express")
-
-    c.save(); buf.seek(0)
+    c.save()
+    buf.seek(0)
     return buf
 
 # ------------------------ UI -------------------------
-st.subheader("Print da passagem")
-col1, col2 = st.columns(2)
-with col1:
-    uploaded = st.file_uploader("Arraste/solte ou escolha um arquivo", type=["png","jpg","jpeg"])
-with col2:
-    cam = st.camera_input("Ou use a câmera (opcional)")
+st.subheader("📷 Envie o print da passagem")
+uploaded = st.file_uploader("Arraste ou escolha o arquivo", type=["png", "jpg", "jpeg"])
 
 image = None
 if uploaded:
     image = Image.open(uploaded)
-elif cam:
-    image = Image.open(cam)
 
 if image:
     st.image(image, caption="Print recebido", use_column_width=True)
 
     try:
+        # 'por+eng' funciona localmente; no Streamlit Cloud pode faltar 'por'.
+        # Se der erro, troque para lang="eng".
         texto = pytesseract.image_to_string(image, lang="por+eng")
     except Exception:
-        st.error("OCR indisponível. Garanta packages.txt com tesseract-ocr e tesseract-ocr-por.")
-        st.stop()
+        texto = pytesseract.image_to_string(image, lang="eng")
 
-    # ---- extrações
+    # ---- extrações a partir do OCR
     milhas_ocr = extrair_milhas(texto)
     taxa_ocr   = extrair_taxa(texto)
     origem_ocr, destino_ocr = extrair_rota(texto)
     ida_data, ida_saida, ida_chegada, volta_data, volta_saida, volta_chegada = extrair_datas_horas(texto)
 
     st.markdown("---")
-    st.subheader("Parâmetros da cotação")
+    st.subheader("⚙️ Parâmetros da Cotação")
 
     companhia   = st.selectbox("Companhia aérea", ["GOL","LATAM","AZUL"], index=1 if "latam" in texto.lower() else 0)
     passageiros = st.number_input("Passageiros", min_value=1, value=2, step=1)
 
-    st.markdown("#### Ajustes (se necessário)")
     origem  = st.text_input("Origem (IATA)",  value=origem_ocr or "-")
     destino = st.text_input("Destino (IATA)", value=destino_ocr or "-")
 
-    ida_data   = st.text_input("Data da ida (dd/mm/aaaa)",   value=ida_data or "-")
-    ida_saida  = st.text_input("Hora saída ida (HH:MM)",     value=ida_saida or "-")
-    ida_chegada= st.text_input("Hora chegada ida (HH:MM)",   value=ida_chegada or "-")
+    ida_data    = st.text_input("Data da ida",            value=ida_data or "-")
+    ida_saida   = st.text_input("Hora saída ida",         value=ida_saida or "-")
+    ida_chegada = st.text_input("Hora chegada ida",       value=ida_chegada or "-")
 
-    volta_data   = st.text_input("Data da volta (dd/mm/aaaa)", value=volta_data or "-")
-    volta_saida  = st.text_input("Hora saída volta (HH:MM)",   value=volta_saida or "-")
-    volta_chegada= st.text_input("Hora chegada volta (HH:MM)", value=volta_chegada or "-")
+    volta_data    = st.text_input("Data da volta",        value=volta_data or "-")
+    volta_saida   = st.text_input("Hora saída volta",     value=volta_saida or "-")
+    volta_chegada = st.text_input("Hora chegada volta",   value=volta_chegada or "-")
 
     milhas   = st.number_input("Milhas totais", value=float(milhas_ocr) if milhas_ocr else 0.0, step=100.0)
     taxa     = st.number_input("Taxa (R$)",     value=float(taxa_ocr) if taxa_ocr else 0.0, step=1.0, format="%.2f")
-    milheiro = st.number_input("Milheiro (R$/1000)", value=25.0, min_value=0.0, max_value=1000.0, step=0.5)
-
-    margem   = st.number_input("Margem (%)", value=15.0, min_value=0.0, max_value=100.0, step=0.5)
-    juros    = st.number_input("Juros (% a.m.)", value=2.9, min_value=0.0, max_value=20.0, step=0.1)
+    milheiro = st.number_input("Milheiro (R$/1000)", value=25.0, step=0.5)
+    margem   = st.number_input("Margem (%)", value=15.0, step=0.5)
+    juros    = st.number_input("Juros (% a.m.)", value=2.9, step=0.1)
 
     if milhas > 0:
         valor_milhas = (milhas / 1000.0) * milheiro
@@ -309,10 +305,10 @@ if image:
 
         st.markdown("---")
         st.subheader("💰 Cotação")
-        # Campo EDITÁVEL para arredondar e forçar recalcular
+
+        # Campo editável para arredondar; recalcula tabela em cima dele
         total_pix = st.number_input("Valor total (Pix) — editável", value=total_pix_sugerido, step=1.0, format="%.2f")
 
-        # Tabela de parcelas baseada no valor editado
         tabela = calcular_parcelas(total_pix, juros, max_n=10)
         df = pd.DataFrame({
             "Parcelas": [f"{n}x" for n,_ in tabela],
@@ -320,7 +316,7 @@ if image:
         })
         st.dataframe(df, use_container_width=True)
 
-        # Salvar histórico
+        # salva no histórico
         novo = pd.DataFrame([{
             "Data/Hora": dt.datetime.now().strftime("%d/%m/%Y %H:%M"),
             "Companhia": companhia,
@@ -330,20 +326,18 @@ if image:
             "Passageiros": passageiros, "Milhas": milhas, "Taxa": taxa, "Milheiro": milheiro,
             "Margem %": margem, "Juros % a.m.": juros, "Valor Pix": total_pix
         }])
-        hist = pd.read_csv(HIST_CSV)
-        hist = pd.concat([novo, hist], ignore_index=True)
+        if os.path.exists(HIST_CSV):
+            hist = pd.read_csv(HIST_CSV)
+            hist = pd.concat([novo, hist], ignore_index=True)
+        else:
+            hist = novo
         hist.to_csv(HIST_CSV, index=False)
 
-        # PDF
-        pdf_buf = gerar_pdf(
-            companhia, origem, destino,
-            ida_data, ida_saida, ida_chegada,
-            volta_data, volta_saida, volta_chegada,
-            passageiros,
-            total_pix,
-            tabela
-        )
-        # salvar em /pdfs e oferecer download
+        # gera PDF
+        pdf_buf = gerar_pdf(companhia, origem, destino, ida_data, ida_saida, ida_chegada,
+                            volta_data, volta_saida, volta_chegada, passageiros,
+                            total_pix, tabela)
+
         filename = f"Portao5Viagens_Cotacao_{companhia}_{origem}_{destino}_{dt.datetime.now().date()}.pdf".replace(" ","_")
         filepath = os.path.join(PDF_DIR, filename)
         with open(filepath, "wb") as f:
@@ -360,4 +354,5 @@ if image:
             st.dataframe(hist, use_container_width=True)
 
 else:
-    st.info("Envie um print (upload/drag) ou use a câmera para capturar a tela.")
+    st.info("Envie um print (upload/drag) para começar.")
+
