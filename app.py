@@ -1,4 +1,4 @@
-# app.py — CotaMilhas Express • Portão 5 Viagens (v3.4 FINAL)
+# app.py — CotaMilhas Express • Portão 5 Viagens (v3.5 FINAL)
 
 import os
 import re
@@ -24,8 +24,8 @@ from reportlab.lib.utils import ImageReader
 st.set_page_config(page_title="CotaMilhas Express • Portão 5 Viagens", layout="centered")
 pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
 
-COLOR_PRIMARY = colors.HexColor("#007C91")   # Azul Portão 5
-COLOR_BORDER  = colors.HexColor("#E5E7EB")   # Cinza borda
+COLOR_PRIMARY = colors.HexColor("#007C91")
+COLOR_BORDER  = colors.HexColor("#E5E7EB")
 
 HIST_CSV  = "cotacoes_historico.csv"
 PDF_DIR   = "pdfs"
@@ -42,7 +42,7 @@ if not os.path.exists(HIST_CSV):
     ]).to_csv(HIST_CSV, index=False)
 
 st.title("🛫 CotaMilhas Express — Portão 5 Viagens")
-st.caption("Envie o print da passagem, ajuste os valores e gere o PDF profissional com cálculo automático.")
+st.caption("Envie o print da passagem, confira os dados detectados, ajuste os valores e gere o PDF profissional.")
 
 # ==============================
 # FUNÇÕES AUXILIARES
@@ -65,41 +65,27 @@ def _pad_hhmm(t: str) -> str:
     if not m: return t.strip()
     return f"{int(m.group(1)):02d}:{m.group(2)}"
 
-# --- OCR específicas ---
 def extrair_milhas(texto: str) -> float:
-    """Detecta milhas/pontos nos layouts Azul, GOL e LATAM."""
     texto_clean = _strip_accents(texto.lower())
-
     pad_total = re.search(r"total[^0-9]*(\d{1,3}(?:\.\d{3})+|\d+)\s*(milhas|pontos?)", texto_clean)
-    if pad_total:
-        return float(pad_total.group(1).replace(".",""))
-
+    if pad_total: return float(pad_total.group(1).replace(".",""))
     pad_combo = re.search(r"(\d{1,3}(?:\.\d{3})+|\d+)\s*(pontos?|milhas)\s*\+\s*(r\$|brl)\s*[\d\.,]+", texto_clean)
-    if pad_combo:
-        return float(pad_combo.group(1).replace(".",""))
-
+    if pad_combo: return float(pad_combo.group(1).replace(".",""))
     matches = re.findall(r"(\d{1,3}(?:\.\d{3})+|\d+)\s*(milhas|pontos?)", texto_clean)
-    if matches:
-        return max(int(m[0].replace(".","")) for m in matches)
-
+    if matches: return max(int(m[0].replace(".","")) for m in matches)
     return 0.0
 
 def extrair_taxa(texto: str) -> float:
-    """Detecta taxa de embarque (R$ ou BRL) incluindo Azul, GOL e LATAM."""
     texto_clean = _strip_accents(texto.lower())
-
     m_azul = re.search(r"(\d{1,3}(?:\.\d{3})+|\d+)\s*(pontos?|milhas)\s*\+\s*(?:r\$|brl)\s*([\d\.,]+)", texto_clean)
     if m_azul: return _to_float(m_azul.group(3))
-
     m_taxa = re.search(r"(taxa|embarque|total).*?(?:r\$|brl)\s*([\d\.,]+)", texto_clean)
     if m_taxa: return _to_float(m_taxa.group(2))
-
     valores = [_to_float(v) for v in re.findall(r"(?:r\$|brl)\s*([\d\.,]+)", texto_clean)]
     valores = [v for v in valores if 0 < v < 300]
     return round(sum(valores),2) if valores else 0.0
 
 def extrair_rota(texto: str):
-    """Extrai origem e destino IATA (POA → CGH / POA-GIG etc.)."""
     pad = re.search(r"\b([A-Z]{3})\b[^A-Z\n]{0,10}[→\-–> ]{1,3}[^A-Z\n]{0,10}\b([A-Z]{3})\b", texto)
     if pad: return pad.group(1), pad.group(2)
     alt = re.findall(r"\b([A-Z]{3})\b", texto)
@@ -127,8 +113,7 @@ def calcular_parcelas(valor_total: float, juros_am: float, max_n: int=10):
 
 def _try_logo(paths):
     for p in paths:
-        if os.path.exists(p):
-            return ImageReader(p)
+        if os.path.exists(p): return ImageReader(p)
     return None
 
 def load_logo_portao5():
@@ -220,6 +205,8 @@ def gerar_pdf(companhia,origem,destino,ida_data,ida_s,ida_c,vol_data,vol_s,vol_c
     c.drawString(2*cm,y,"podendo haver diferenças tarifárias e multas. Somos consultoria especializada em viagens.")
     y-=12
     c.drawString(2*cm,y,"Comece sua viagem embarcando pelo Portão 5 ✈️")
+    y-=12
+    c.drawString(2*cm,y,"📞 Contato para confirmação: (51) 99755-6161")
 
     c.save(); buf.seek(0)
     return buf
@@ -239,6 +226,14 @@ if uploaded:
     taxa_ocr=extrair_taxa(texto)
     origem,destino=extrair_rota(texto)
     ida_data,ida_s,ida_c,vol_data,vol_s,vol_c=extrair_datas_horas(texto)
+
+    # ---- Exibição de dados extraídos ----
+    st.markdown("### 🔎 Dados detectados automaticamente")
+    col1,col2,col3 = st.columns(3)
+    col1.metric("Origem", origem)
+    col2.metric("Destino", destino)
+    col3.metric("Total Pontos/Milhas", f"{milhas:,.0f}")
+    st.metric("Taxa de Embarque", f"R$ {taxa_ocr:,.2f}")
 
     st.markdown("---")
     st.subheader("✈️ Parâmetros da Cotação")
