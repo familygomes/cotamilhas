@@ -1,5 +1,4 @@
-# app.py — CotaMilhas Express • Portão 5 Viagens (v3.6 FINAL)
-
+# app.py — CotaMilhas Express • Portão 5 Viagens (v3.7 FINAL)
 import os
 import re
 import unicodedata
@@ -25,10 +24,10 @@ st.set_page_config(page_title="CotaMilhas Express • Portão 5 Viagens", layout
 pytesseract.pytesseract.tesseract_cmd = "/usr/bin/tesseract"
 
 COLOR_PRIMARY = colors.HexColor("#007C91")
-COLOR_BORDER  = colors.HexColor("#E5E7EB")
+COLOR_BORDER = colors.HexColor("#E5E7EB")
 
-HIST_CSV  = "cotacoes_historico.csv"
-PDF_DIR   = "pdfs"
+HIST_CSV = "cotacoes_historico.csv"
+PDF_DIR = "pdfs"
 LOGOS_DIR = "logos"
 os.makedirs(PDF_DIR, exist_ok=True)
 
@@ -152,13 +151,10 @@ def gerar_pdf(companhia,origem,destino,ida_data,ida_s,ida_c,vol_data,vol_s,vol_c
     buf=BytesIO()
     c=canvas.Canvas(buf,pagesize=A4)
 
-    p5 = load_logo_portao5()
-cia_img = load_logo_cia(companhia)
-
-if p5:
-    c.drawImage(p5, 2*cm, H - 75, width=110, height=52, mask='auto', preserveAspectRatio=True)
-if cia_img:
-    c.drawImage(cia_img, W - 2*cm - 95, H - 70, width=95, height=42, mask='auto', preserveAspectRatio=True)
+    p5=load_logo_portao5()
+    cia_img=load_logo_cia(companhia)
+    if p5: c.drawImage(p5,2*cm,H-75,width=110,height=52,mask='auto',preserveAspectRatio=True)
+    if cia_img: c.drawImage(cia_img,W-2*cm-95,H-70,width=95,height=42,mask='auto',preserveAspectRatio=True)
 
     c.setFont("Helvetica-Bold",18)
     c.drawCentredString(W/2,H-45,"Informações do Voo")
