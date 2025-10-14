@@ -1,4 +1,4 @@
-# app.py — CotaMilhas Express • Portão 5 Viagens (v3.5 FINAL)
+# app.py — CotaMilhas Express • Portão 5 Viagens (v3.6 FINAL)
 
 import os
 import re
@@ -65,22 +65,39 @@ def _pad_hhmm(t: str) -> str:
     if not m: return t.strip()
     return f"{int(m.group(1)):02d}:{m.group(2)}"
 
+# --- OCR ---
 def extrair_milhas(texto: str) -> float:
+    """Detecta milhas/pontos em Azul, GOL e LATAM."""
     texto_clean = _strip_accents(texto.lower())
-    pad_total = re.search(r"total[^0-9]*(\d{1,3}(?:\.\d{3})+|\d+)\s*(milhas|pontos?)", texto_clean)
-    if pad_total: return float(pad_total.group(1).replace(".",""))
+
+    # Azul: "total 02 viajantes 212.800 pontos + r$ 240,16"
+    m_azul_total = re.search(r"total[^0-9]*(\d{1,3}(?:\.\d{3})+|\d+)\s*(pontos?)", texto_clean)
+    if m_azul_total:
+        return float(m_azul_total.group(1).replace(".", ""))
+
+    # Azul/Latam padrão: "212.800 pontos + R$ 240,16"
     pad_combo = re.search(r"(\d{1,3}(?:\.\d{3})+|\d+)\s*(pontos?|milhas)\s*\+\s*(r\$|brl)\s*[\d\.,]+", texto_clean)
-    if pad_combo: return float(pad_combo.group(1).replace(".",""))
+    if pad_combo:
+        return float(pad_combo.group(1).replace(".", ""))
+
+    # Padrão geral
     matches = re.findall(r"(\d{1,3}(?:\.\d{3})+|\d+)\s*(milhas|pontos?)", texto_clean)
-    if matches: return max(int(m[0].replace(".","")) for m in matches)
+    if matches:
+        valores = [int(m[0].replace(".", "")) for m in matches]
+        return max(valores)
+
     return 0.0
 
 def extrair_taxa(texto: str) -> float:
+    """Detecta taxa de embarque (R$ ou BRL) incluindo Azul, GOL e LATAM."""
     texto_clean = _strip_accents(texto.lower())
+
     m_azul = re.search(r"(\d{1,3}(?:\.\d{3})+|\d+)\s*(pontos?|milhas)\s*\+\s*(?:r\$|brl)\s*([\d\.,]+)", texto_clean)
     if m_azul: return _to_float(m_azul.group(3))
+
     m_taxa = re.search(r"(taxa|embarque|total).*?(?:r\$|brl)\s*([\d\.,]+)", texto_clean)
     if m_taxa: return _to_float(m_taxa.group(2))
+
     valores = [_to_float(v) for v in re.findall(r"(?:r\$|brl)\s*([\d\.,]+)", texto_clean)]
     valores = [v for v in valores if 0 < v < 300]
     return round(sum(valores),2) if valores else 0.0
@@ -227,13 +244,13 @@ if uploaded:
     origem,destino=extrair_rota(texto)
     ida_data,ida_s,ida_c,vol_data,vol_s,vol_c=extrair_datas_horas(texto)
 
-    # ---- Exibição de dados extraídos ----
     st.markdown("### 🔎 Dados detectados automaticamente")
     col1,col2,col3 = st.columns(3)
     col1.metric("Origem", origem)
     col2.metric("Destino", destino)
-    col3.metric("Total Pontos/Milhas", f"{milhas:,.0f}")
-    st.metric("Taxa de Embarque", f"R$ {taxa_ocr:,.2f}")
+    col3.metric("Taxa de Embarque", f"R$ {taxa_ocr:,.2f}")
+
+    milhas = st.number_input("Total de Pontos/Milhas detectado — editável", value=float(milhas), step=100.0)
 
     st.markdown("---")
     st.subheader("✈️ Parâmetros da Cotação")
@@ -260,3 +277,4 @@ if uploaded:
 
 else:
     st.info("Envie o print (PNG ou JPG) da passagem para começar.")
+
