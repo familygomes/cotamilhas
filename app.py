@@ -155,12 +155,10 @@ def gerar_pdf(companhia,origem,destino,ida_data,ida_s,ida_c,vol_data,vol_s,vol_c
     p5 = load_logo_portao5()
 cia_img = load_logo_cia(companhia)
 
-# Aumenta a altura do logo Portão 5 Viagens para melhor proporção
 if p5:
     c.drawImage(p5, 2*cm, H - 75, width=110, height=52, mask='auto', preserveAspectRatio=True)
 if cia_img:
     c.drawImage(cia_img, W - 2*cm - 95, H - 70, width=95, height=42, mask='auto', preserveAspectRatio=True)
-
 
     c.setFont("Helvetica-Bold",18)
     c.drawCentredString(W/2,H-45,"Informações do Voo")
